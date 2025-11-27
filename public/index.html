@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Pune Air Quality</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css"/>
+  <style>
+    body { font-family: Arial; margin: 0; }
+    #map { height: 500px; }
+    #box { padding: 10px; }
+    .info { background: #f2f2f2; padding: 8px; margin: 6px 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="box">
+    <h2>Air Quality in Pune Region</h2>
+    <input id="cityIn" placeholder="Type city name (e.g. Pune)" size="25"/>
+    <button onclick="getAQI()">Get AQI</button>
+    <div id="out" class="info">Loading …</div>
+  </div>
+  <div id="map"></div>
+  <canvas id="chart" width="800" height="250"></canvas>
+
+  <script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const map = L.map('map').setView([18.52, 73.86], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    const cities = [
+      {name:'Pune', lat:18.52, lon:73.86},
+      {name:'Khopoli', lat:18.78, lon:73.35},
+      {name:'Kamshet', lat:18.76, lon:73.55},
+      {name:'Lonavala', lat:18.75, lon:73.41},
+      {name:'Chakan', lat:18.76, lon:73.86},
+      {name:'Wagholi', lat:18.58, lon:73.98}
+    ];
+
+    cities.forEach(c=>{
+      fetch(`/api/aqi/${c.name}`)
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.status==='success'){
+            const aqi = d.data.current.pollution.aqius;
+            const color = aqi>150?'purple':aqi>100?'red':aqi>50?'orange':'green';
+            L.circleMarker([c.lat,c.lon],{color,fillColor:color,fillOpacity:0.7,radius:12})
+              .addTo(map).bindPopup(`<b>${c.name}</b><br>AQI: ${aqi}`);
+          }
+        });
+    });
+
+    function getAQI(){
+      const city = document.getElementById('cityIn').value || 'Pune';
+      fetch(`/api/aqi/${city}`)
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.status==='success'){
+            const p = d.data.current.pollution;
+            document.getElementById('out').innerHTML =
+              `<b>${city}</b> — AQI: ${p.aqius} | PM2.5: ${p.pm2_5} µg/m³`;
+            // forecast
+            const {lat,lon} = d.data.city.location;
+            return fetch(`/api/forecast/${lat}/${lon}`);
+          } else { throw new Error('City not found'); }
+        })
+        .then(r=>r.json())
+        .then(drawChart)
+        .catch(e=>{ document.getElementById('out').textContent = e.message; });
+    }
+
+    function drawChart(js){
+      const labs=[], vals=[];
+      js.list.slice(0,28).forEach((o,i)=>{ // next 7 days (4 forecasts/day)
+        if(i%4===0) labs.push(new Date(o.dt*1000).toLocaleDateString());
+        vals.push(o.components.pm2_5);
+      });
+      new Chart(document.getElementById('chart'), {
+        type:'line',
+        data:{
+          labels:labs,
+          datasets:[{label:'PM2.5 (µg/m³)', data:vals, borderColor:'red', tension:0.3}]
+        },
+        options:{ responsive:true, plugins:{title:{display:true,text:'7-Day PM2.5 Forecast'}}}
+      });
+    }
+
+    getAQI(); // auto-load Pune
+  </script>
+</body>
+</html>
