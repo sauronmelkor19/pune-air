@@ -1,90 +1,167 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Pune Air Quality</title>
+  <meta charset="utf-8"/>
+  <title>Air Quality</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css"/>
   <style>
-    body { font-family: Arial; margin: 0; }
-    #map { height: 500px; }
-    #box { padding: 10px; }
-    .info { background: #f2f2f2; padding: 8px; margin: 6px 0; border-radius: 4px; }
+    body{font-family:Arial;margin:0}#map{height:500px}#box{padding:10px}
+    .air-card{width:260px;background:#fff6d6;border:1px solid #f9d34a;border-radius:8px;padding:12px;margin:10px 0;font-size:14px;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+    .air-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .aqi-circle{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#fff;font-size:18px}
+    .poll-table{width:100%;font-size:13px;border-collapse:collapse;margin:6px 0}.poll-table td{padding:3px 0}.poll-table td:nth-child(2){text-align:right;font-weight:bold}
+    .health-row{display:flex;align-items:center;margin-top:8px;font-size:12px;background:#ffeaa7;border-radius:4px;padding:6px}.health-row #healthIcon{margin-right:6px;font-size:16px}
+    .mini-forecast{display:flex;justify-content:space-between;margin-top:10px;border-top:1px solid #f9d34a;padding-top:8px}.day{text-align:center;font-size:12px}.day b{display:block;font-size:16px;margin-top:2px}.hidden{display:none}
   </style>
 </head>
 <body>
-  <div id="box">
-    <h2>Air Quality in Pune Region</h2>
-    <input id="cityIn" placeholder="Type city name (e.g. Pune)" size="25"/>
-    <button onclick="getAQI()">Get AQI</button>
-    <div id="out" class="info">Loading …</div>
+<div id="box">
+  <h2>Air Quality</h2>
+  <input id="cityIn" placeholder="Type city name (e.g. Pune)" size="25"/>
+  <button onclick="getAQI()">Get AQI</button>
+
+  <!--  yellow card  -->
+  <div id="airCard" class="air-card hidden">
+    <div class="air-header"><span id="cardCity">-</span><span id="cardAqi" class="aqi-circle">-</span></div>
+    <table class="poll-table">
+      <tr><td>PM₂.₅</td><td id="cardPM25"><b>-</b> μg/m³</td></tr>
+      <tr><td>PM₁₀</td><td id="cardPM10"><b>-</b> μg/m³</td></tr>
+      <tr><td>SO₂</td><td id="cardSO2"><b>-</b> μg/m³</td></tr>
+      <tr><td>O₃</td><td id="cardO3"><b>-</b> μg/m³</td></tr>
+      <tr><td>NO₂</td><td id="cardNO2"><b>-</b> μg/m³</td></tr>
+      <tr><td>CO</td><td id="cardCO"><b>-</b> mg/m³</td></tr>
+      <tr><td>O₂</td><td id="cardO2"><b>-</b> μg/m³</td></tr>
+    </table>
+    <div class="health-row"><div id="healthIcon">⚠️</div><div id="healthText">Loading health advice…</div></div>
+    <div class="air-row">Updated <span id="cardTime">-</span></div>
+    <div class="mini-forecast">
+      <div class="day"><span id="d0n">-</span><b id="d0v">-</b></div>
+      <div class="day"><span id="d1n">-</span><b id="d1v">-</b></div>
+      <div class="day"><span id="d2n">-</span><b id="d2v">-</b></div>
+    </div>
   </div>
-  <div id="map"></div>
-  <canvas id="chart" width="800" height="250"></canvas>
+</div>
 
-  <script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script>
-    const map = L.map('map').setView([18.52, 73.86], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+<div id="map"></div>
+<canvas id="chart" width="800" height="250"></canvas>
 
-    const cities = [
-      {name:'Pune', lat:18.52, lon:73.86},
-      {name:'Khopoli', lat:18.78, lon:73.35},
-      {name:'Kamshet', lat:18.76, lon:73.55},
-      {name:'Lonavala', lat:18.75, lon:73.41},
-      {name:'Chakan', lat:18.76, lon:73.86},
-      {name:'Wagholi', lat:18.58, lon:73.98}
-    ];
+<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const OWM_KEY = '81e530b80a000a863acc4ed923f4fd33';   // ← your key
 
-    cities.forEach(c=>{
-      fetch(`/api/aqi/${c.name}`)
-        .then(r=>r.json())
-        .then(d=>{
-          if(d.status==='success'){
-            const aqi = d.data.current.pollution.aqius;
-            const color = aqi>150?'purple':aqi>100?'red':aqi>50?'orange':'green';
-            L.circleMarker([c.lat,c.lon],{color,fillColor:color,fillOpacity:0.7,radius:12})
-              .addTo(map).bindPopup(`<b>${c.name}</b><br>AQI: ${aqi}`);
-          }
-        });
+  /* ----------  map  ---------- */
+  const map = L.map('map').setView([18.52, 73.86], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  /* ----------  main search  ---------- */
+  async function getAQI(){
+    const raw = document.getElementById('cityIn').value.trim() || 'Pune';
+    const city = raw.toLowerCase().replace(/\s+/g,'');
+
+    try{
+      // 1. WAQI city search
+      const r1 = await fetch(`/api/aqi/${city}`);
+      const d1 = await r1.json();
+      if(d1.status !== 'success') throw new Error('City not found');
+
+      let { lat, lon, cityName, aqi, pollutants } = await extractWAQI(d1, raw);
+      await showCard(cityName, aqi, pollutants);
+      showMarker(lat, lon, cityName, aqi);
+      const fc = await fetch(`/api/forecast/${lat}/${lon}`).then(r=>r.json());
+      showForecast(fc);
+    }catch(e){ alert(e.message); }
+  }
+
+  /* ----------  helpers  ---------- */
+  async function extractWAQI(d, raw){
+    const cityName = d.data.city.name;
+    const aqi      = d.data.current.pollution.aqius;
+    let p          = d.data.current.pollution;        // may be sparse
+    let lat, lon;
+
+    if(d.data.city.geo){ lat=d.data.city.geo[0]; lon=d.data.city.geo[1]; }
+    else {                                          // geocode fallback
+      const geo = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(raw)}&limit=1&appid=${OWM_KEY}`).then(r=>r.json());
+      if(!geo.length) throw new Error('No coordinates');
+      lat=geo[0].lat; lon=geo[0].lon;
+    }
+
+    // if ANY gas missing → pull full set from OpenWeather current
+    const hasAll = ['pm2_5','pm10','so2','o3','no2','co'].every(k=> p[k]!=null);
+    if(!hasAll){
+      const cur = await fetch(`/api/current/${lat}/${lon}`).then(r=>r.json());
+      p = cur.data.pollution;          // always complete
+    }
+    return { lat, lon, cityName, aqi, pollutants:p };
+  }
+
+  function showCard(city, aqi, p){
+    document.getElementById('cardCity').textContent = city;
+    document.getElementById('cardAqi').textContent  = aqi;
+    document.getElementById('cardTime').textContent = new Date().toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit',month:'short',day:'numeric'});
+
+    // pollutants  (– instead of N/A)
+    document.getElementById('cardPM25').innerHTML = `<b>${p.pm2_5?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardPM10').innerHTML = `<b>${p.pm10 ?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardSO2').innerHTML  = `<b>${p.so2  ?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardO3').innerHTML   = `<b>${p.o3   ?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardNO2').innerHTML  = `<b>${p.no2  ?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardCO').innerHTML   = `<b>${p.co   ?.toFixed(1)||'–'}</b>`;
+    document.getElementById('cardO2').innerHTML   = `<b>${p.o2   ?.toFixed(1)||'–'}</b>`;
+
+    const circle = document.getElementById('cardAqi');
+    if(aqi>300)        circle.style.background='#7e0023';
+    else if(aqi>200)   circle.style.background='#8f3f97';
+    else if(aqi>150)   circle.style.background='#ff0000';
+    else if(aqi>100)   circle.style.background='#ff7e00';
+    else if(aqi>50)    circle.style.background='#ffff00';
+    else               circle.style.background='#00e400';
+    document.getElementById('airCard').classList.remove('hidden');
+    setHealthAdvice(aqi, p);
+  }
+
+  function showMarker(lat, lon, city, aqi){
+    map.setView([lat,lon],11);
+    if(window.currentMarker) map.removeLayer(window.currentMarker);
+    window.currentMarker = L.circleMarker([lat,lon],{
+      color:'#fff',weight:2,fillOpacity:0.9,
+      fillColor:document.getElementById('cardAqi').style.background,
+      radius:16
+    }).addTo(map).bindPopup(`<b>${city}</b><br>AQI: ${aqi}`).openPopup();
+  }
+
+  function showForecast(fc){
+    const list = fc.list.filter((_,i)=>i%8===0).slice(0,3);
+    list.forEach((o,idx)=>{
+      const date = new Date(o.dt*1000);
+      document.getElementById(`d${idx}n`).textContent = date.toLocaleDateString('en-IN',{weekday:'short'});
+      document.getElementById(`d${idx}v`).textContent = o.components.pm2_5.toFixed(0);
     });
+  }
 
-    function getAQI(){
-      const city = document.getElementById('cityIn').value || 'Pune';
-      fetch(`/api/aqi/${city}`)
-        .then(r=>r.json())
-        .then(d=>{
-          if(d.status==='success'){
-            const p = d.data.current.pollution;
-            document.getElementById('out').innerHTML =
-              `<b>${city}</b> — AQI: ${p.aqius} | PM2.5: ${p.pm2_5} µg/m³`;
-            // forecast
-            const {lat,lon} = d.data.city.location;
-            return fetch(`/api/forecast/${lat}/${lon}`);
-          } else { throw new Error('City not found'); }
-        })
-        .then(r=>r.json())
-        .then(drawChart)
-        .catch(e=>{ document.getElementById('out').textContent = e.message; });
-    }
+  /* ----------  health advice  ---------- */
+  function setHealthAdvice(aqi, p){
+    const txt = document.getElementById('healthText');
+    const icon= document.getElementById('healthIcon');
+    let msg=[];
+    if(aqi>300){icon.textContent='☠️'; msg.push('HAZARDOUS – everyone may experience serious health effects. Avoid outdoor exertion.');}
+    else if(aqi>200){icon.textContent='🛑'; msg.push('Very unhealthy – sensitive groups: avoid outdoor activity. Others: limit exertion.');}
+    else if(aqi>150){icon.textContent='⚠️'; msg.push('Unhealthy – sensitive groups should reduce outdoor activities.');}
+    else if(aqi>100){icon.textContent='⚠️'; msg.push('Unhealthy for sensitive groups – heart/lung patients, children & older adults: limit prolonged outdoor effort.');}
+    else if(aqi>50){icon.textContent='✅'; msg.push('Moderate – acceptable for most. Very sensitive people may experience minor breathing discomfort.');}
+    else{icon.textContent='😊'; msg.push('Good – air quality is satisfactory for most people.');}
+    if(p.pm2_5>55) msg.push('PM₂.₅ high – can penetrate deep into lungs and blood; linked to heart attacks, asthma, low birth-weight.');
+    if(p.pm10>154) msg.push('PM₁₀ high – irritates eyes, nose, throat; worsens asthma & bronchitis.');
+    if(p.so2>185)  msg.push('SO₂ high – narrows airways, triggers asthma, causes coughing/wheezing.');
+    if(p.no2>100)  msg.push('NO₂ high – inflames airways, increases respiratory infections, reduces lung growth in kids.');
+    if(p.o3>140)   msg.push('Ozone high – scorches lung tissue, causes chest pain, coughing, throat irritation.');
+    if(p.co>12)    msg.push('CO high – reduces oxygen delivery; headache, dizziness, fatigue, heart strain.');
+    txt.innerHTML = msg.join('<br>• ');
+  }
 
-    function drawChart(js){
-      const labs=[], vals=[];
-      js.list.slice(0,28).forEach((o,i)=>{ // next 7 days (4 forecasts/day)
-        if(i%4===0) labs.push(new Date(o.dt*1000).toLocaleDateString());
-        vals.push(o.components.pm2_5);
-      });
-      new Chart(document.getElementById('chart'), {
-        type:'line',
-        data:{
-          labels:labs,
-          datasets:[{label:'PM2.5 (µg/m³)', data:vals, borderColor:'red', tension:0.3}]
-        },
-        options:{ responsive:true, plugins:{title:{display:true,text:'7-Day PM2.5 Forecast'}}}
-      });
-    }
-
-    getAQI(); // auto-load Pune
-  </script>
+  /* ----------  initial load  ---------- */
+  getAQI();
+</script>
 </body>
 </html>
